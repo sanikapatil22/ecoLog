@@ -11,10 +11,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // Auth routes
+  // Provide a fallback GET /api/login that creates a guest session in local/dev mode
+  // This allows the landing page to point to /api/login and still sign users in as guests.
+  app.get("/api/login", async (req: any, res) => {
+    try {
+      const generatedId = `guest:${crypto.randomUUID()}`;
+      const guestClaims = {
+        sub: generatedId,
+        email: null,
+        first_name: "Guest",
+        last_name: "User",
+        profile_image_url: null,
+      };
+
+      try {
+        await storage.upsertUser({
+          id: generatedId,
+          email: null as any,
+          firstName: "Guest",
+          lastName: "User",
+          profileImageUrl: null as any,
+        });
+      } catch (err) {
+        console.warn('Could not upsert guest user into DB (login fallback):', err);
+      }
+
+      const userSession: any = {
+        claims: guestClaims,
+        access_token: null,
+        refresh_token: null,
+        expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
+      };
+
+      if (req.login) {
+        await new Promise<void>((resolve, reject) => {
+          req.login(userSession, (err: any) => {
+            if (err) return reject(err);
+            resolve();
+          });
+        });
+        return res.redirect('/');
+      }
+
+      req.user = userSession;
+      return res.redirect('/');
+    } catch (err) {
+      console.error('Error in /api/login guest fallback:', err);
+      return res.status(500).json({ message: 'Login fallback failed' });
+    }
+  });
+
   app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
+      let user;
+      try {
+        user = await storage.getUser(userId);
+      } catch (dbError) {
+        console.warn("Database unavailable, returning guest user from session:", dbError);
+        // Return a default user object based on session claims when DB is unavailable
+        user = {
+          id: userId,
+          email: req.user.claims.email || null,
+          firstName: req.user.claims.first_name || "Guest",
+          lastName: req.user.claims.last_name || "User",
+          profileImageUrl: req.user.claims.profile_image_url || null,
+          accountType: "individual",
+          companyName: null,
+          ecoPoints: 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+      }
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -35,14 +103,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         profile_image_url: null,
       };
 
-      // Upsert into users table with default accountType
-      await storage.upsertUser({
-        id: generatedId,
-        email: null as any,
-        firstName: "Guest",
-        lastName: "User",
-        profileImageUrl: null as any,
-      });
+      // Upsert into users table with default accountType (best-effort)
+      try {
+        await storage.upsertUser({
+          id: generatedId,
+          email: null as any,
+          firstName: "Guest",
+          lastName: "User",
+          profileImageUrl: null as any,
+        });
+      } catch (err) {
+        // Not fatal for creating a guest session — log and continue.
+        console.warn('Could not upsert guest user into DB, continuing with in-memory session:', err);
+      }
 
       // Attach a minimal session object compatible with the rest of the app
       const userSession: any = {
@@ -54,13 +127,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use passport's login if available to establish session
       if (req.login) {
-        req.login(userSession, (err: any) => {
-          if (err) {
-            console.error('Guest login failed', err);
-            return res.status(500).json({ message: 'Guest login failed' });
-          }
-          return res.json({ message: 'Guest session created' });
+        await new Promise<void>((resolve, reject) => {
+          req.login(userSession, (err: any) => {
+            if (err) return reject(err);
+            resolve();
+          });
         });
+        return res.json({ message: 'Guest session created' });
       } else {
         // Fallback: set on req.user
         req.user = userSession;

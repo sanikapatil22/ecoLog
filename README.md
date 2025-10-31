@@ -41,7 +41,7 @@ docker run --name elog-postgres -e POSTGRES_USER=eco_user -e POSTGRES_PASSWORD=e
 npm run dev
 ```
 
-6. Open the app in the browser: Vite usually serves the client at `http://localhost:5173` and the server runs on port `3000`.
+6. Open the app in the browser: Vite usually serves the client at `http://localhost:5173` and the server runs on port `5050`.
 
 ## "Start" button behavior
 

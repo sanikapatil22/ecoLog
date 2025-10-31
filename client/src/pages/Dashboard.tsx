@@ -97,7 +97,8 @@ function DashboardContent({ user }: { user: any }) {
   // Create action mutation
   const createActionMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest("/api/actions", "POST", data);
+      const response = await apiRequest("POST", "/api/actions", data);
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/actions"] });

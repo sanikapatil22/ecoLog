@@ -25,21 +25,44 @@ const getOidcConfig = memoize(
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
-    ttl: sessionTtl,
-    tableName: "sessions",
-  });
+  // If DATABASE_URL is provided, use a Postgres-backed session store.
+  // Otherwise fall back to the default memory store for local development.
+  // Only use Postgres-backed session store when explicitly enabled to avoid
+  // runtime errors when a DATABASE_URL is present but the DB is not reachable.
+  if (process.env.DATABASE_URL && process.env.USE_PG_SESSION === "true") {
+    try {
+      const pgStore = connectPg(session);
+      const sessionStore = new pgStore({
+        conString: process.env.DATABASE_URL,
+        // automatically create sessions table if missing (helps local/dev)
+        createTableIfMissing: true,
+        ttl: sessionTtl,
+        tableName: "sessions",
+      });
+      return session({
+        secret: process.env.SESSION_SECRET!,
+        store: sessionStore,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+          httpOnly: true,
+          secure: false, // 👈 safer for local dev (change to true in prod)
+          maxAge: sessionTtl,
+        },
+      });
+    } catch (err) {
+      console.warn("Could not initialize Postgres session store — falling back to in-memory sessions:", err);
+    }
+  }
+
+  // In-memory sessions for local development (not suitable for production)
   return session({
-    secret: process.env.SESSION_SECRET!,
-    store: sessionStore,
+    secret: process.env.SESSION_SECRET || "dev-secret",
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: false, // 👈 safer for local dev (change to true in prod)
+      secure: false,
       maxAge: sessionTtl,
     },
   });
@@ -77,11 +100,11 @@ export async function setupAuth(app: Express) {
 
   const config = await getOidcConfig();
 
-  // If no OIDC configuration is available, skip strategy setup but keep session support for guest users
-  if (!config) {
-    console.log("⚠️ No OIDC configuration detected — running in local guest-auth mode");
-    return;
-  }
+  // Provide a login route even when OIDC is not configured so client calls do not 404.
+  // If OIDC is not configured, redirect to the local signup flow.
+  // If OIDC is configured, perform normal OIDC authentication.
+
+  const registeredStrategies = new Set<string>();
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
@@ -93,9 +116,8 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  const registeredStrategies = new Set<string>();
-
   const ensureStrategy = (domain: string) => {
+    if (!config) return;
     const strategyName = `replitauth:${domain}`;
     if (!registeredStrategies.has(strategyName)) {
       const strategy = new Strategy(
@@ -112,10 +134,11 @@ export async function setupAuth(app: Express) {
     }
   };
 
-  passport.serializeUser((user: Express.User, cb) => cb(null, user));
-  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
-
+  // Login route: if no OIDC config, redirect to client signup where guest login is available.
   app.get("/api/login", (req, res, next) => {
+    if (!config) {
+      return res.redirect("/signup");
+    }
     ensureStrategy(req.hostname);
     passport.authenticate(`replitauth:${req.hostname}`, {
       prompt: "login consent",
@@ -123,36 +146,44 @@ export async function setupAuth(app: Express) {
     })(req, res, next);
   });
 
-  app.get("/api/callback", (req, res, next) => {
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
-    })(req, res, next);
-  });
-
-  app.get("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+  // Callback and logout endpoints only valid when OIDC is configured
+  if (config) {
+    app.get("/api/callback", (req, res, next) => {
+      ensureStrategy(req.hostname);
+      passport.authenticate(`replitauth:${req.hostname}`, {
+        successReturnToOrRedirect: "/",
+        failureRedirect: "/api/login",
+      })(req, res, next);
     });
-  });
+
+    app.get("/api/logout", (req, res) => {
+      req.logout(() => {
+        res.redirect(
+          client.buildEndSessionUrl(config, {
+            client_id: process.env.REPL_ID || process.env.OIDC_CLIENT_ID || "",
+            post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
+          }).href
+        );
+      });
+    });
+  }
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!req.isAuthenticated() || !user || !user.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
   const now = Math.floor(Date.now() / 1000);
   if (now <= user.expires_at) {
     return next();
+  }
+
+  // For guest users, don't try to refresh tokens - just check if they're still valid
+  if (user.claims?.sub?.startsWith('guest:')) {
+    return res.status(401).json({ message: "Guest session expired" });
   }
 
   const refreshToken = user.refresh_token;
