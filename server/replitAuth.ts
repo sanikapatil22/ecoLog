@@ -71,11 +71,15 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Always provide a minimal serialize/deserialize so req.login works for guest/local sessions
+  passport.serializeUser((user: Express.User, cb) => cb(null, user));
+  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
+
   const config = await getOidcConfig();
 
-  // ✅ Skip setup locally if config is null
+  // If no OIDC configuration is available, skip strategy setup but keep session support for guest users
   if (!config) {
-    console.log("⚠️ Skipping Replit authentication setup (local mode)");
+    console.log("⚠️ No OIDC configuration detected — running in local guest-auth mode");
     return;
   }
 

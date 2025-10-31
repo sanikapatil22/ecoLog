@@ -56,7 +56,7 @@ export default function Landing() {
                 Sign In
               </Button>
               <Button
-                onClick={() => window.location.href = "/api/login"}
+                onClick={() => setLocation("/signup")}
                 data-testid="button-get-started"
               >
                 Get Started
@@ -82,7 +82,7 @@ export default function Landing() {
                 <Button
                   size="lg"
                   className="gap-2"
-                  onClick={() => window.location.href = "/api/login"}
+                  onClick={() => setLocation("/signup?type=individual")}
                   data-testid="button-hero-start"
                 >
                   <Leaf className="w-5 h-5" />
@@ -91,7 +91,7 @@ export default function Landing() {
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={() => window.location.href = "/api/login"}
+                  onClick={() => setLocation("/signup?type=corporate")}
                   data-testid="button-hero-corporate"
                 >
                   For Corporates

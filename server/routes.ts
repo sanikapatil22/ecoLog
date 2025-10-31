@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import crypto from "crypto";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
@@ -18,6 +19,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Guest auth (development convenience) - creates a temporary guest user and logs them in
+  app.post("/api/auth/guest", async (req: any, res) => {
+    try {
+      // Create a lightweight guest identity
+      const generatedId = `guest:${crypto.randomUUID()}`;
+      const guestClaims = {
+        sub: generatedId,
+        email: null,
+        first_name: "Guest",
+        last_name: "User",
+        profile_image_url: null,
+      };
+
+      // Upsert into users table with default accountType
+      await storage.upsertUser({
+        id: generatedId,
+        email: null as any,
+        firstName: "Guest",
+        lastName: "User",
+        profileImageUrl: null as any,
+      });
+
+      // Attach a minimal session object compatible with the rest of the app
+      const userSession: any = {
+        claims: guestClaims,
+        access_token: null,
+        refresh_token: null,
+        expires_at: Math.floor(Date.now() / 1000) + 60 * 60, // 1 hour
+      };
+
+      // Use passport's login if available to establish session
+      if (req.login) {
+        req.login(userSession, (err: any) => {
+          if (err) {
+            console.error('Guest login failed', err);
+            return res.status(500).json({ message: 'Guest login failed' });
+          }
+          return res.json({ message: 'Guest session created' });
+        });
+      } else {
+        // Fallback: set on req.user
+        req.user = userSession;
+        return res.json({ message: 'Guest session created (no passport)' });
+      }
+    } catch (error) {
+      console.error('Error creating guest session', error);
+      return res.status(500).json({ message: 'Failed to create guest session' });
     }
   });
 
