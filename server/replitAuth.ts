@@ -7,11 +7,17 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
+// ✅ FIX: safely handle missing REPL_ID (local mode)
 const getOidcConfig = memoize(
   async () => {
+    if (!process.env.REPL_ID) {
+      console.log("⚠️ REPL_ID not set — skipping Replit OIDC config (local mode)");
+      return null;
+    }
+
     return await client.discovery(
       new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!
+      process.env.REPL_ID
     );
   },
   { maxAge: 3600 * 1000 }
@@ -33,7 +39,7 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: false, // 👈 safer for local dev (change to true in prod)
       maxAge: sessionTtl,
     },
   });
@@ -67,6 +73,12 @@ export async function setupAuth(app: Express) {
 
   const config = await getOidcConfig();
 
+  // ✅ Skip setup locally if config is null
+  if (!config) {
+    console.log("⚠️ Skipping Replit authentication setup (local mode)");
+    return;
+  }
+
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
     verified: passport.AuthenticateCallback
@@ -77,10 +89,8 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  // Keep track of registered strategies
   const registeredStrategies = new Set<string>();
 
-  // Helper function to ensure strategy exists for a domain
   const ensureStrategy = (domain: string) => {
     const strategyName = `replitauth:${domain}`;
     if (!registeredStrategies.has(strategyName)) {
@@ -149,6 +159,7 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   try {
     const config = await getOidcConfig();
+    if (!config) throw new Error("Missing OIDC config");
     const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
     updateUserSession(user, tokenResponse);
     return next();
