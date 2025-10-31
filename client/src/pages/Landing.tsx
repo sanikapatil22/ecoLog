@@ -1,10 +1,38 @@
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Leaf, Droplets, Recycle, TrendingUp, Users, Award } from "lucide-react";
 import heroImage from "@assets/generated_images/Diverse_eco-friendly_activities_hero_44179e7a.png";
-import { Link } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
+import { useLocation } from "wouter";
 
 export default function Landing() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      setLocation("/dashboard");
+    }
+  }, [isAuthenticated, isLoading, setLocation]);
+
+  // Show loading state while checking auth
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't show landing if authenticated (will redirect via useEffect)
+  if (isAuthenticated) {
+    return null;
+  }
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b">
@@ -20,16 +48,19 @@ export default function Landing() {
               <a href="#corporate" className="text-sm font-medium text-foreground hover-elevate px-3 py-2 rounded-md">For Business</a>
             </nav>
             <div className="flex items-center gap-2">
-              <Link href="/dashboard">
-                <Button variant="outline" data-testid="button-login">
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/dashboard">
-                <Button data-testid="button-get-started">
-                  Get Started
-                </Button>
-              </Link>
+              <Button
+                variant="outline"
+                onClick={() => window.location.href = "/api/login"}
+                data-testid="button-login"
+              >
+                Sign In
+              </Button>
+              <Button
+                onClick={() => window.location.href = "/api/login"}
+                data-testid="button-get-started"
+              >
+                Get Started
+              </Button>
             </div>
           </div>
         </div>
@@ -48,17 +79,23 @@ export default function Landing() {
                 Log activities, visualize your contribution, and earn EcoPoints for sustainable choices.
               </p>
               <div className="flex flex-wrap gap-4">
-                <Link href="/dashboard">
-                  <Button size="lg" className="gap-2" data-testid="button-hero-start">
-                    <Leaf className="w-5 h-5" />
-                    Start Logging
-                  </Button>
-                </Link>
-                <Link href="/corporate">
-                  <Button size="lg" variant="outline" data-testid="button-hero-corporate">
-                    For Corporates
-                  </Button>
-                </Link>
+                <Button
+                  size="lg"
+                  className="gap-2"
+                  onClick={() => window.location.href = "/api/login"}
+                  data-testid="button-hero-start"
+                >
+                  <Leaf className="w-5 h-5" />
+                  Start Logging
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => window.location.href = "/api/login"}
+                  data-testid="button-hero-corporate"
+                >
+                  For Corporates
+                </Button>
               </div>
               <div className="grid grid-cols-3 gap-6 mt-12">
                 <div>
