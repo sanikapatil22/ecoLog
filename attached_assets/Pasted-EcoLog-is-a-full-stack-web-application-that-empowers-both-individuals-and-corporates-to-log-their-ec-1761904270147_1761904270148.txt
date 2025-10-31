@@ -1,0 +1,43 @@
+EcoLog is a full-stack web application that empowers both individuals and corporates to log their eco-friendly actions and visualize their collective environmental impact. The platform translates sustainable choices—such as energy saving, recycling, upcycling, and sustainable commuting—into measurable metrics like CO₂ reduction, water savings, and waste diverted from landfills.
+
+Individuals earn EcoPoints for each verified action, which can be redeemed for discounts and offers from sustainable brands under our Corporate Membership Program. Corporates gain access to an impact dashboard that aggregates employee data, generates sustainability reports, and helps design internal eco-incentive programs.
+
+A supporting feature, the Offline AI Analyzer, allows users to upload images of unused items. The AI classifies whether an item can be recycled or upcycled, and provides tailored suggestions on how and where it can be reused—promoting a circular economy within the app.
+
+Goals
+
+Build a unified sustainability tracking platform for individuals and corporates.
+
+Convert eco-actions into quantifiable impact and rewards.
+
+Encourage responsible production and consumption through upcycling, recycling, and partnerships.
+
+Enhance accessibility with a lightweight offline AI analyzer for waste identification.
+
+Tech Stack
+
+Frontend: Next.js (TypeScript) + Tailwind CSS + Recharts + Framer Motion
+Backend: Node.js (TypeScript) with Prisma ORM
+Database: PostgreSQL (PlanetScale / Supabase)
+Authentication: Clerk / Auth.js
+Storage: Cloudinary (for proof uploads)
+Real-time updates: Socket.io (leaderboards, dashboards)
+AI Analyzer: TensorFlow.js / ONNX Runtime (lightweight offline model)
+Deployment: Vercel (frontend + backend API)
+Development: Replit
+
+Core Modules
+
+Eco-Action Logging – Track actions like energy saving, recycling, and sustainable commuting.
+
+Impact Dashboard – Visualize real-time environmental metrics (CO₂ saved, waste diverted).
+
+Corporate Dashboard – Aggregate organizational impact, manage teams, and run challenges.
+
+EcoPoints Wallet – Earn, track, and redeem EcoPoints for partner offers.
+
+Offline AI Analyzer – Upload an item image to receive recyclability or upcycling suggestions.
+
+Execution & Impact
+
+EcoLog aims to bridge individual intent and collective environmental action. By combining measurable data, tangible rewards, and smart upcycling insights, it creates an ecosystem where sustainability becomes engaging, transparent, and rewarding—for everyone from conscious individuals to large organizations.
